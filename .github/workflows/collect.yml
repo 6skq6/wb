@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: '17 22 * * *'      # 22:17 UTC = 次日 06:17 北京
   workflow_dispatch:            # 也可以在 Actions 页面手动点
+    inputs:
+      test_push:
+        description: '发一条测试提醒（即使没有到期项）—— 用来验证微信推送通不通'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -92,4 +97,10 @@ jobs:
         env:
           SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
-        run: python collector/notify.py --days 3
+        run: |
+          if [ "${{ inputs.test_push }}" = "true" ]; then
+            echo "测试模式：强制发一条"
+            python collector/notify.py --days 3 --force
+          else
+            python collector/notify.py --days 3
+          fi
