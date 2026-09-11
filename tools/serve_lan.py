@@ -38,8 +38,14 @@ SAFE = {
     "collector/out/activities.enc",
 }
 
+# 明文数据只有「只听本机」时才放行 —— 本地开发要看数据，
+# 但一旦挂到局域网/校园网上，明文就等于没加密。
+LOCAL_ONLY = {"collector/out/activities.json"}
+
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    allow_plaintext = False          # main() 里按监听地址决定
+
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=str(ROOT), **kw)
 
@@ -54,7 +60,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             rel = real.relative_to(ROOT).as_posix()
         except (ValueError, OSError):
             return None
-        return rel if rel in SAFE else None
+        allowed = SAFE | (LOCAL_ONLY if self.allow_plaintext else set())
+        return rel if rel in allowed else None
 
     def do_GET(self):
         if self._resolve() is None:
@@ -95,11 +102,18 @@ def main():
     ap.add_argument("--host", default="0.0.0.0")
     args = ap.parse_args()
 
+    loopback = args.host in ("127.0.0.1", "localhost", "::1")
+    Handler.allow_plaintext = loopback
+
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer((args.host, args.port), Handler) as httpd:
         print("白名单模式 —— 只有这些能访问：")
         for f in sorted(SAFE):
             print("   ", f)
+        if loopback:
+            print("    collector/out/activities.json   （只听本机才放行明文）")
+        else:
+            print("\n明文 activities.json 已屏蔽 —— 局域网能看到的只有密文。")
         print()
         if args.host == "0.0.0.0":
             ip = lan_ip()
